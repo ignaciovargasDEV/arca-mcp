@@ -52,7 +52,7 @@ Eso te permite correrlo en un VPS sin dominio y accederlo por túnel SSH.
 
 ## Qué Necesitás
 
-1. Ser monotributista con clave fiscal suficiente para administrar certificados y relaciones.
+1. Ser monotributista con clave fiscal 3 suficiente para administrar certificados y relaciones.
 2. Certificado digital de ARCA creado manualmente.
 3. Certificado asociado al web service de Facturación Electrónica / WSFE.
 4. Punto de venta tipo Web Service, distinto al de Comprobantes en Línea.
