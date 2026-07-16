@@ -1,8 +1,10 @@
-# Hermes Integration
+# Integración Con Hermes
 
-Hermes reads MCP servers from `~/.hermes/config.yaml`.
+Hermes puede consumir este MCP igual que cualquier otro servidor MCP HTTP.
 
-Add this under `mcp_servers:` when the MCP server runs on the same VPS:
+## Configuración
+
+Editá `~/.hermes/config.yaml` y agregá esto bajo `mcp_servers:`:
 
 ```yaml
 mcp_servers:
@@ -13,28 +15,43 @@ mcp_servers:
     connect_timeout: 30
 ```
 
-Reload MCP tools from Hermes:
+Si ya tenés otros MCP, no dupliques `mcp_servers:`. Agregá solo el bloque `arca_mcp` al mismo nivel que los otros servidores.
+
+## Recargar Tools
+
+Desde Hermes:
 
 ```txt
 /reload-mcp
 ```
 
-If Hermes asks for confirmation, approve it.
+Si te pide confirmación, aprobalo.
 
-Test with:
+## Probar Con Hermes
 
-```txt
-Use arca_mcp config_status.
-```
-
-Preview without emitting:
+Primero verificá configuración:
 
 ```txt
-Use arca_mcp preview_factura_c with monto 100 and descripcion "test MCP".
+Usá arca_mcp config_status.
 ```
 
-Production emission requires the `confirmation_id` from the preview and the exact phrase:
+Después probá un preview sin emitir:
+
+```txt
+Usá arca_mcp preview_factura_c con monto 100 y descripción "prueba MCP".
+```
+
+Si el preview está bien y querés emitir real, usá el `confirmation_id` devuelto y la frase exacta:
 
 ```txt
 CONFIRMO EMITIR FACTURA REAL
 ```
+
+## Importante
+
+Hermes puede llamar tools, pero el MCP igual mantiene sus propias barreras:
+
+- preview obligatorio
+- `confirmation_id` con vencimiento
+- confirmación textual exacta
+- `ALLOW_PRODUCTION=true` para producción

@@ -1,56 +1,201 @@
-# ARCA Setup
+# Setup Fiscal En ARCA
 
-This project emits Factura C through ARCA/AFIP WSFE using Afip SDK. Before production use, your CUIT must have a certificate associated to WSFE and a Web Service point of sale.
+Objetivo: dejar tu CUIT habilitado para emitir Factura C por Web Service, con certificado propio, punto de venta correcto y sin darle tu clave fiscal a ningún tercero.
 
-## 1. Generate Private Key And CSR
+Esta guía está escrita para monotributistas y para el flujo de este MCP, que usa Afip SDK.
 
-Run this on a trusted machine or directly on your VPS. Keep `arca.key` private.
+## Antes De Arrancar
+
+- El portal de ARCA cambia seguido. Si un nombre no coincide exacto, buscá el equivalente en pantalla.
+- Guardá `arca.key`, `pedido.csr` y `arca.crt` en un lugar seguro.
+- La private key (`arca.key`) no se sube a ARCA y no se comparte.
+- El orden recomendado es: certificado, asociación a WSFE, punto de venta Web Service.
+- No uses automatizaciones que te pidan clave fiscal si no querés delegar ese acceso.
+
+## 1. Clave Fiscal
+
+Para usar estos servicios normalmente necesitás clave fiscal con nivel suficiente, usualmente nivel 3 o superior. Verificá el requisito vigente en ARCA porque puede cambiar.
+
+Servicios que vas a usar:
+
+- `Administración de Certificados Digitales`.
+- `Administrador de Relaciones con Clave Fiscal`.
+- `Administración de Puntos de Venta y Domicilios`.
+
+## 2. Generar Private Key Y CSR
+
+Podés hacerlo en tu máquina, en WSL, en Git Bash o en el VPS. Linux y macOS suelen traer OpenSSL.
+
+Generá la private key:
 
 ```bash
 openssl genrsa -out arca.key 2048
+```
 
+Generá el CSR:
+
+```bash
 openssl req -new -key arca.key \
-  -subj "/C=AR/O=YOUR_LEGAL_NAME/CN=arca-mcp/serialNumber=CUIT YOUR_CUIT_WITHOUT_DASHES" \
+  -subj "/C=AR/O=TU_NOMBRE_LEGAL/CN=arca-mcp/serialNumber=CUIT TUCUIT_SIN_GUIONES" \
   -out pedido.csr
 ```
 
-Example subject:
+Ejemplo ficticio:
 
-```txt
-/C=AR/O=Ignacio Matias Vargas/CN=arca-mcp/serialNumber=CUIT 20123456789
+```bash
+openssl req -new -key arca.key \
+  -subj "/C=AR/O=Juan Perez/CN=arca-mcp/serialNumber=CUIT 20123456789" \
+  -out pedido.csr
 ```
 
-## 2. Create Certificate In ARCA
+Campos importantes:
 
-In ARCA, use Administrador de Certificados Digitales:
+- `C=AR`: país.
+- `O=TU_NOMBRE_LEGAL`: tu nombre o razón social como figura en ARCA.
+- `CN=arca-mcp`: alias para reconocer el certificado. Podés usar otro alias.
+- `serialNumber=CUIT TUCUIT`: tiene que decir `CUIT`, espacio, y tu CUIT sin guiones.
 
-1. Add an alias using the same `CN` value.
-2. Upload `pedido.csr`.
-3. Download the generated certificate.
-4. Save it as `certs/arca.crt`.
+Al final tenés:
 
-Never upload or share `arca.key`.
+```txt
+arca.key    private key, no se comparte nunca
+pedido.csr  archivo que sí subís a ARCA
+```
 
-## 3. Associate Certificate To WSFE
+## 3. Crear El Certificado En ARCA
 
-In Administrador de Relaciones con Clave Fiscal, associate the certificate alias to the Electronic Billing Web Service, usually listed as WSFE or Facturacion Electronica.
+Entrá a `Administración de Certificados Digitales`.
 
-## 4. Create A Web Service Point Of Sale
+Flujo típico:
 
-Create a point of sale specifically for Web Services. Do not reuse a Comprobantes en Linea point of sale.
+1. Agregá un alias.
+2. Usá el mismo alias que pusiste en `CN`, por ejemplo `arca-mcp`.
+3. Adjuntá `pedido.csr`.
+4. Confirmá la creación del alias/certificado.
+5. Descargá el certificado que te da ARCA.
 
-Set that number in `.env`:
+Renombralo para este proyecto:
+
+```txt
+certs/arca.crt
+```
+
+Y guardá la private key como:
+
+```txt
+certs/arca.key
+```
+
+No subas `arca.key` al portal. ARCA solo necesita el CSR.
+
+## 4. Asociar El Certificado A WSFE
+
+El certificado por sí solo no alcanza. Tenés que asociarlo al web service de Facturación Electrónica.
+
+Entrá a `Administrador de Relaciones con Clave Fiscal`.
+
+Flujo típico:
+
+1. Nueva relación.
+2. Servicio.
+3. ARCA.
+4. Web Services.
+5. Buscá `Facturación Electrónica` o `WSFE`.
+6. Como representante, elegí el certificado/alias que acabás de crear.
+7. Confirmá la relación.
+
+Si esta asociación falta, el certificado existe pero no puede facturar por WSFE.
+
+## 5. Crear Punto De Venta Web Service
+
+Necesitás un punto de venta específico para Web Services. No reutilices uno de `Comprobantes en Línea`.
+
+Entrá a `Administración de Puntos de Venta y Domicilios`.
+
+Flujo típico:
+
+1. Alta de punto de venta.
+2. Elegí un número libre.
+3. Tipo/sistema: Web Service.
+4. Sistema: algo equivalente a `Factura Electrónica - Monotributo - Web Services`.
+5. Guardá.
+
+Después poné ese número en `.env`:
 
 ```env
 AFIP_PUNTO_VENTA=3
 ```
 
-## 5. Afip SDK Token
+Si mezclás puntos de venta de Comprobantes en Línea y Web Service, vas a tener errores de autorización o numeración.
 
-Create an account at Afip SDK and set:
+## 6. Crear Token En Afip SDK
+
+Creá una cuenta en Afip SDK y generá un `access_token`.
+
+En `.env`:
 
 ```env
-AFIP_ACCESS_TOKEN=your-token
+AFIP_ACCESS_TOKEN=tu-token
 ```
 
-The Afip SDK production flow receives your certificate and private key to authenticate with ARCA. If you do not accept that tradeoff, this project needs a local WSAA implementation instead.
+Para producción el MCP le pasa a Afip SDK:
+
+```txt
+CUIT
+production=true
+cert
+key
+access_token
+```
+
+## 7. Probar Antes De Emitir Real
+
+Primero levantá el MCP con:
+
+```env
+PRODUCTION=false
+ALLOW_PRODUCTION=false
+```
+
+Después revisá `config_status` desde tu cliente MCP.
+
+Cuando pases a producción, dejá inicialmente:
+
+```env
+PRODUCTION=true
+ALLOW_PRODUCTION=false
+```
+
+Hacé un `preview_factura_c`. Si todo está bien, recién ahí activá:
+
+```env
+ALLOW_PRODUCTION=true
+```
+
+Probá con una factura real chica y verificá el comprobante en ARCA.
+
+## Checklist Final
+
+- `arca.key` guardada y con backup seguro.
+- `pedido.csr` generado.
+- `arca.crt` descargado desde ARCA.
+- Certificado asociado a WSFE.
+- Punto de venta Web Service creado.
+- `AFIP_ACCESS_TOKEN` configurado.
+- `.env` con CUIT y punto de venta correctos.
+- `config_status` OK.
+- Preview revisado antes de emitir.
+
+## Problemas Comunes
+
+`cert_file_readable=false` o `key_file_readable=false`:
+Revisá rutas y permisos de `certs/arca.crt` y `certs/arca.key`.
+
+ARCA rechaza el comprobante por punto de venta:
+Verificá que el punto sea Web Service y que esté asociado correctamente.
+
+Error de autorización WSFE:
+Revisá la relación en `Administrador de Relaciones con Clave Fiscal`.
+
+El CSR rebota:
+Revisá `O=`, `CN=` y `serialNumber=CUIT ...`. El nombre legal tiene que coincidir razonablemente con ARCA.

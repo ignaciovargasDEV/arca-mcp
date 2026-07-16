@@ -1,27 +1,39 @@
 # ARCA MCP
 
-MCP server for issuing Argentine ARCA/AFIP Factura C invoices through Afip SDK, with a local PostgreSQL audit database and a safety-first two-step emission flow.
+Servidor MCP para emitir Factura C de ARCA/AFIP usando Afip SDK, PostgreSQL local y un flujo seguro de preview antes de emitir.
 
-This project turns a fiscal invoicing backend into MCP tools usable from agents, IDEs, Hermes, Claude Desktop, Cursor, VS Code extensions, or any MCP-compatible client.
+La idea es simple: en vez de tener un bot de Telegram, WhatsApp o una web cerrada, exponés herramientas MCP que cualquier agente compatible puede usar desde Hermes, Claude Desktop, Cursor, VS Code, Windsurf u otro cliente MCP.
 
-## Features
+Este proyecto está inspirado en el enfoque de [`Lanuti-Franco/facturador-ARCA`](https://github.com/Lanuti-Franco/facturador-ARCA): separar el core fiscal de la interfaz. Acá la interfaz es MCP.
 
-- Factura C emission through ARCA WSFE using Afip SDK.
-- Local PostgreSQL storage, no Supabase required.
-- Streamable HTTP MCP endpoint.
-- Docker Compose deployment.
-- Preview-before-emit workflow with single-use confirmation tokens.
-- Production kill switch with `ALLOW_PRODUCTION`.
-- PDF generation through Afip SDK.
-- Audit log for MCP tool calls.
-- SSH tunnel friendly; no public domain required.
+## Qué Hace
 
-## Architecture
+- Emite **Factura C** para monotributistas mediante WSFE.
+- Usa **Afip SDK** para hablar con los web services de ARCA.
+- Guarda comprobantes, previews y auditoría en **PostgreSQL local**.
+- Corre con **Docker Compose**.
+- Expone tools MCP por `streamable-http`.
+- Genera PDF con QR obligatorio de ARCA.
+- Valida CUIT con dígito verificador y acepta DNI.
+- Acepta montos en formato argentino o estadounidense: `15.000,50`, `15000,50`, `15,000.50`.
+- Tiene alerta de umbral para consumidor final anónimo (`UMBRAL_CF`).
+- Tiene un kill switch de producción: `ALLOW_PRODUCTION`.
+- Obliga a hacer preview antes de emitir una factura real.
+
+## Qué No Hace Todavía
+
+- No emite Factura A/B para responsables inscriptos.
+- No emite Nota de Crédito C todavía.
+- No manda emails todavía.
+- No tiene firma WSAA local; usa Afip SDK.
+- No reemplaza la revisión de tu contador.
+
+## Arquitectura
 
 ```txt
-MCP client / agent / IDE
+Cliente MCP / agente / IDE
         |
-        | SSH tunnel or private network
+        | tunel SSH o red privada
         v
 arca-mcp container  ->  Afip SDK  ->  ARCA WSFE
         |
@@ -29,112 +41,152 @@ arca-mcp container  ->  Afip SDK  ->  ARCA WSFE
 postgres-main container
 ```
 
-The server exposes MCP tools over `streamable-http` at:
+Por defecto el compose publica todo solo en localhost del host:
 
 ```txt
-http://127.0.0.1:8000/mcp
+MCP:        http://127.0.0.1:8000/mcp
+PostgreSQL: 127.0.0.1:5432
 ```
 
-Docker Compose binds both MCP and PostgreSQL to localhost by default.
+Eso te permite correrlo en un VPS sin dominio y accederlo por túnel SSH.
 
-## Quick Start
+## Qué Necesitás
+
+1. Ser monotributista con clave fiscal suficiente para administrar certificados y relaciones.
+2. Certificado digital de ARCA creado manualmente.
+3. Certificado asociado al web service de Facturación Electrónica / WSFE.
+4. Punto de venta tipo Web Service, distinto al de Comprobantes en Línea.
+5. Cuenta y `access_token` de Afip SDK.
+6. Docker y Docker Compose.
+
+La parte fiscal está explicada paso a paso en [`docs/arca-setup.md`](docs/arca-setup.md).
+
+## Instalación Rápida
 
 ```bash
 git clone https://github.com/ignaciovargasDEV/arca-mcp.git
 cd arca-mcp
 cp .env.example .env
+mkdir -p certs backups
 ```
 
-Edit `.env`, then start:
+Editá `.env` con tus datos.
+
+Levantá los servicios:
 
 ```bash
 docker compose up -d --build
 ```
 
-Check containers:
+Verificá que estén vivos:
 
 ```bash
 docker compose ps
 ```
 
-## Configuration
+Logs del MCP:
 
-Minimum `.env` for homologation/testing:
+```bash
+docker compose logs -f arca-mcp
+```
+
+## Configuración Para Homologación
+
+Para probar sin emitir comprobantes reales:
 
 ```env
 POSTGRES_DB=arca_mcp
 POSTGRES_USER=arca_mcp_user
-POSTGRES_PASSWORD=change-me
+POSTGRES_PASSWORD=change-me-long-random-password
 
-AFIP_ACCESS_TOKEN=your-afip-sdk-token
+AFIP_ACCESS_TOKEN=tu-token-de-afip-sdk
 PRODUCTION=false
 ALLOW_PRODUCTION=false
 
 TEST_CUIT=20409378472
 TEST_PUNTO_VENTA=1
 
-EMISOR_NOMBRE=Your Name
+EMISOR_NOMBRE=Tu Nombre
 FACTURA_DESCRIPCION=Servicios
 CONCEPTO=2
 ```
 
-Production requires:
-
-```env
-PRODUCTION=true
-ALLOW_PRODUCTION=false
-AFIP_CUIT=your-cuit-without-dashes
-AFIP_PUNTO_VENTA=your-webservice-pos
-AFIP_CERT_PATH=/certs/arca.crt
-AFIP_KEY_PATH=/certs/arca.key
-```
-
-Keep `ALLOW_PRODUCTION=false` until you are ready to emit real invoices.
-
-## Certificates
-
-Create and mount:
-
-```txt
-certs/arca.crt
-certs/arca.key
-```
-
-These files are ignored by git and must never be committed.
-
-See [docs/arca-setup.md](docs/arca-setup.md) for the ARCA certificate and point-of-sale setup.
-
-## Usage
-
-The safe production flow is:
-
-1. Call `preview_factura_c`.
-2. Review amount, receiver, mode, warnings, and date.
-3. Call `emitir_factura_c` with the returned `confirmation_id` and exact confirmation phrase.
-
-Production confirmation phrase:
-
-```txt
-CONFIRMO EMITIR FACTURA REAL
-```
-
-Homologation confirmation phrase:
+En homologación la confirmación requerida para emitir es:
 
 ```txt
 CONFIRMO EMITIR
 ```
 
-Available tools are documented in [docs/tools.md](docs/tools.md).
+## Configuración Para Producción
 
-## SSH Tunnel
+Para comprobantes reales:
 
-For a VPS without a domain:
-
-```bash
-ssh -L 8000:127.0.0.1:8000 user@your-vps
+```env
+PRODUCTION=true
+ALLOW_PRODUCTION=false
+AFIP_CUIT=tu-cuit-sin-guiones
+AFIP_PUNTO_VENTA=tu-punto-de-venta-web-service
+AFIP_CERT_PATH=/certs/arca.crt
+AFIP_KEY_PATH=/certs/arca.key
 ```
 
-Configure your MCP client with:
+Montá tus archivos así:
+
+```txt
+certs/arca.crt  certificado descargado de ARCA
+certs/arca.key  private key generada con OpenSSL
+```
+
+No actives `ALLOW_PRODUCTION=true` hasta haber revisado bien el primer preview.
+
+En producción la confirmación exacta para emitir es:
+
+```txt
+CONFIRMO EMITIR FACTURA REAL
+```
+
+## Flujo Seguro De Emisión
+
+`emitir_factura_c` no emite de una. Primero tenés que pedir un preview.
+
+1. Llamás `preview_factura_c`.
+2. Revisás monto, receptor, fecha, modo y advertencias.
+3. El MCP devuelve un `confirmation_id` que dura 10 minutos.
+4. Llamás `emitir_factura_c` con ese `confirmation_id` y la frase exacta.
+
+Ejemplo conceptual:
+
+```txt
+preview_factura_c(monto="15000", documento="20-12345678-6", descripcion="Servicios julio")
+```
+
+Después:
+
+```txt
+emitir_factura_c(confirmation_id="...", confirmacion="CONFIRMO EMITIR FACTURA REAL")
+```
+
+## Tools MCP Disponibles
+
+- `config_status`: revisa DB, token, modo, CUIT, punto de venta y certificados.
+- `validar_cuit_dni`: valida CUIT/DNI y devuelve el tipo de documento ARCA.
+- `preview_factura_c`: genera preview y `confirmation_id` sin emitir.
+- `emitir_factura_c`: emite usando un `confirmation_id` válido.
+- `resumen_periodo`: lista comprobantes emitidos entre dos fechas ISO.
+- `exportar_csv_periodo`: devuelve un CSV separado por `;`.
+- `receptores_recientes`: lista receptores identificados ya usados.
+
+Más detalle en [`docs/tools.md`](docs/tools.md).
+
+## Uso Desde Un VPS Sin Dominio
+
+Si lo corrés en un VPS, no hace falta exponer el puerto a internet. Abrí un túnel SSH desde tu máquina:
+
+```bash
+ssh -L 8000:127.0.0.1:8000 usuario@tu-vps
+```
+
+Configurá tu cliente MCP con:
 
 ```txt
 http://127.0.0.1:8000/mcp
@@ -142,28 +194,52 @@ http://127.0.0.1:8000/mcp
 
 ## Hermes
 
-Hermes setup is documented in [docs/hermes.md](docs/hermes.md).
+Si usás Hermes, agregás el MCP en `~/.hermes/config.yaml` y después corrés `/reload-mcp`.
 
-## Deployment And Backups
+La guía está en [`docs/hermes.md`](docs/hermes.md).
 
-Deployment and PostgreSQL backup commands are documented in [docs/deployment.md](docs/deployment.md).
+## Backups
 
-## Security
+El proyecto trae scripts simples para PostgreSQL:
 
-Read [docs/security.md](docs/security.md) before enabling production.
+```bash
+./scripts/backup-postgres.sh
+./scripts/restore-postgres.sh backups/arca_mcp_YYYYmmddTHHMMSSZ.sql.gz
+```
 
-Important defaults:
+Más detalle en [`docs/deployment.md`](docs/deployment.md).
 
-- MCP binds to `127.0.0.1:8000` on the host.
-- PostgreSQL binds to `127.0.0.1:5432` on the host.
-- Production emission requires `ALLOW_PRODUCTION=true`.
-- Emission requires a preview confirmation token.
-- Confirmation tokens expire after 10 minutes.
+## Seguridad
+
+- No subas `.env` a git.
+- No subas `certs/` a git.
+- No compartas tu `arca.key`.
+- No expongas `/mcp` a internet sin autenticación, VPN o túnel.
+- No actives `ALLOW_PRODUCTION=true` hasta que estés listo para emitir real.
+- Revisá siempre el preview antes de confirmar.
+
+Más detalle en [`docs/security.md`](docs/security.md).
+
+## Afip SDK Y Certificados
+
+Este proyecto usa Afip SDK. Eso simplifica mucho la integración con ARCA, pero tenés que saber el tradeoff: para producción, Afip SDK recibe tu certificado y tu private key para autenticar contra ARCA.
+
+Ese certificado no es tu clave fiscal, pero sí permite facturar desde el punto de venta asociado. Si querés evitar terceros por completo, habría que reemplazar Afip SDK por una implementación local de WSAA/WSFE.
+
+## Roadmap Posible
+
+- Nota de Crédito C.
+- Envío por email.
+- Regeneración de PDF por número de comprobante.
+- Aviso de vencimiento del certificado.
+- Límite mensual/anual de monotributo.
+- Firma WSAA local sin Afip SDK.
+- Soporte para Factura A/B.
 
 ## Disclaimer
 
-This is not tax advice. Verify emitted invoices, fiscal limits, receiver identification requirements, and monotributo rules with your accountant.
+Esto no es asesoramiento fiscal. Verificá comprobantes emitidos, topes, umbrales de consumidor final y categoría de monotributo con tu contador. Usalo bajo tu responsabilidad.
 
-## License
+## Licencia
 
-MIT
+MIT. Usalo, modificalo y compartilo.

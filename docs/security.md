@@ -1,46 +1,81 @@
-# Security Notes
+# Seguridad
 
-This server can emit real fiscal invoices. Treat it as production infrastructure.
+Este MCP puede emitir comprobantes fiscales reales. Tratá el servicio como infraestructura productiva.
 
-## Defaults
+## Defaults Seguros
 
-- The Docker Compose file binds MCP and PostgreSQL to `127.0.0.1` only.
-- Production emission requires both `PRODUCTION=true` and `ALLOW_PRODUCTION=true`.
-- `emitir_factura_c` requires a prior `preview_factura_c` call.
-- Confirmation tokens expire after 10 minutes and are single-use.
-- The exact confirmation phrase for production is `CONFIRMO EMITIR FACTURA REAL`.
-- Tool calls are written to `mcp_audit_log` with secret-like keys redacted.
+- Docker Compose publica MCP solo en `127.0.0.1:8000`.
+- Docker Compose publica PostgreSQL solo en `127.0.0.1:5432`.
+- Producción requiere `PRODUCTION=true`.
+- Emitir en producción requiere además `ALLOW_PRODUCTION=true`.
+- `emitir_factura_c` requiere un `confirmation_id` generado por `preview_factura_c`.
+- Los `confirmation_id` expiran a los 10 minutos.
+- Los `confirmation_id` son de un solo uso.
+- La frase exacta para producción es `CONFIRMO EMITIR FACTURA REAL`.
+- Las llamadas quedan registradas en `mcp_audit_log`.
+- El log intenta filtrar claves con nombres sensibles como `token`, `secret`, `password`, `cert` y `key`.
 
-## Do Not Commit
+## Archivos Que No Tenés Que Subir
 
 - `.env`
 - `certs/`
 - `*.key`
 - `*.crt`
 - `*.csr`
-- database dumps
+- dumps de base de datos
+- backups comprimidos
 
-## Recommended Access Patterns
+Ya están ignorados en `.gitignore` y `.dockerignore`, pero revisá igual antes de publicar.
 
-For a VPS without a domain, use an SSH tunnel:
+## Acceso Recomendado
+
+Para uso personal en un VPS sin dominio, usá túnel SSH:
 
 ```bash
-ssh -L 8000:127.0.0.1:8000 user@your-vps
+ssh -L 8000:127.0.0.1:8000 usuario@tu-vps
 ```
 
-Then configure your MCP client with:
+Después conectás el cliente MCP a:
 
 ```txt
 http://127.0.0.1:8000/mcp
 ```
 
-For team usage, put the service behind a private network such as WireGuard or Tailscale. Do not expose the MCP endpoint directly to the public internet without authentication and rate limiting.
+Para uso de equipo, mejor usar una red privada tipo WireGuard o Tailscale.
 
-## Production Checklist
+No expongas el endpoint MCP directo a internet sin autenticación, rate limiting y monitoreo.
 
-- Certificate was generated manually and associated to WSFE.
-- Point of sale is a Web Service point of sale.
-- `.env` uses the correct CUIT and point of sale.
-- `ALLOW_PRODUCTION=false` until the first preview was reviewed.
-- A small real invoice was tested and verified in ARCA.
-- Backups are configured for PostgreSQL.
+## Producción
+
+Antes de `ALLOW_PRODUCTION=true`:
+
+- Confirmá que el certificado fue generado manualmente.
+- Confirmá que el certificado está asociado a WSFE.
+- Confirmá que el punto de venta es Web Service.
+- Confirmá que `AFIP_CUIT` no tiene guiones.
+- Confirmá que `AFIP_PUNTO_VENTA` es el correcto.
+- Corré `config_status`.
+- Hacé un preview y leelo completo.
+
+Después de la primera factura real:
+
+- Verificá que exista en ARCA.
+- Verificá CAE, fecha, punto de venta e importe.
+- Verificá que quedó guardada en PostgreSQL.
+- Hacé un backup.
+
+## Afip SDK
+
+Afip SDK simplifica la integración con ARCA, pero para producción recibe tu certificado y private key para autenticar.
+
+Ese certificado no es tu clave fiscal, pero permite operar el web service asociado. Si no querés ese tradeoff, necesitás implementar WSAA local y firmar desde tu infraestructura.
+
+## Backup
+
+Configurá backups periódicos de PostgreSQL. El repo trae:
+
+```bash
+./scripts/backup-postgres.sh
+```
+
+Probá también restaurar en un entorno aparte. Un backup que nunca restauraste es una promesa, no una garantía.

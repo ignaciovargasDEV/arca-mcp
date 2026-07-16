@@ -1,54 +1,130 @@
-# MCP Tools
+# Tools MCP
+
+Estas son las herramientas que expone el servidor.
 
 ## `config_status`
 
-Checks database, Afip SDK token, production flags, CUIT, point of sale, and certificate readability. It does not return secrets.
+Revisa la configuración sin devolver secretos.
+
+Devuelve:
+
+- modo (`production` u homologación)
+- CUIT configurado
+- punto de venta
+- concepto
+- estado de PostgreSQL
+- si hay token de Afip SDK
+- si producción está habilitada
+- si el certificado y la key son legibles
+
+Uso típico:
+
+```txt
+Usá arca_mcp config_status.
+```
 
 ## `validar_cuit_dni`
 
-Validates a CUIT or DNI and returns the ARCA document type.
+Valida un CUIT o DNI.
+
+Para CUIT valida el dígito verificador.
+
+Ejemplo:
+
+```txt
+validar_cuit_dni(documento="20-12345678-6")
+```
 
 ## `preview_factura_c`
 
-Creates a preview and a single-use `confirmation_id`. It does not emit.
+Genera un preview. No emite.
 
-Arguments:
+Argumentos:
 
-- `monto`: required string. Accepts Argentine or US number formats.
-- `documento`: optional CUIT or DNI. Omit for Consumidor Final.
-- `condicion_iva`: optional ARCA condition ID. Defaults to Consumidor Final or Monotributo.
-- `fecha`: optional `dd/mm`, `dd/mm/yyyy`, or `hoy`.
-- `descripcion`: optional PDF line description.
+- `monto`: requerido. Acepta `15000`, `15.000`, `15.000,50`, `15,000.50`.
+- `documento`: opcional. CUIT o DNI. Si lo omitís, usa Consumidor Final.
+- `condicion_iva`: opcional. Si omitís y hay documento, usa Monotributo por default.
+- `fecha`: opcional. Acepta `hoy`, `dd/mm` o `dd/mm/aaaa`.
+- `descripcion`: opcional. Sale en el PDF, no se envía como dato fiscal a ARCA.
+
+Devuelve:
+
+- `confirmation_id`
+- monto formateado
+- receptor
+- condición IVA
+- advertencias
+- frase de confirmación requerida
+
+Ejemplo:
+
+```txt
+preview_factura_c(monto="15000", documento="20-12345678-6", descripcion="Servicios julio")
+```
 
 ## `emitir_factura_c`
 
-Emits a real or homologation Factura C using a valid `confirmation_id`.
+Emite Factura C usando un `confirmation_id` generado por `preview_factura_c`.
 
-Arguments:
+Argumentos:
 
-- `confirmation_id`: returned by `preview_factura_c`.
-- `confirmacion`: exact confirmation phrase.
+- `confirmation_id`: token devuelto por el preview.
+- `confirmacion`: frase exacta.
 
-Production phrase:
+En producción:
 
 ```txt
 CONFIRMO EMITIR FACTURA REAL
 ```
 
-Homologation phrase:
+En homologación:
 
 ```txt
 CONFIRMO EMITIR
 ```
 
+Devuelve:
+
+- tipo de comprobante
+- punto de venta
+- número
+- CAE
+- vencimiento del CAE
+- URL del PDF
+
 ## `resumen_periodo`
 
-Lists emitted invoices between two ISO dates.
+Lista comprobantes emitidos entre dos fechas ISO.
+
+Ejemplo:
+
+```txt
+resumen_periodo(desde="2026-07-01", hasta="2026-07-31")
+```
 
 ## `exportar_csv_periodo`
 
-Returns a semicolon-separated CSV for a date range.
+Devuelve un CSV separado por `;` para un período.
+
+Ejemplo:
+
+```txt
+exportar_csv_periodo(desde="2026-07-01", hasta="2026-07-31")
+```
 
 ## `receptores_recientes`
 
-Lists recently used identified receivers.
+Lista receptores identificados usados recientemente.
+
+Ejemplo:
+
+```txt
+receptores_recientes(limit=5)
+```
+
+## Notas De Uso
+
+- Si vas a emitir real, siempre pedí preview primero.
+- Si el monto supera `UMBRAL_CF` y no pasaste documento, el preview te avisa.
+- Si `ALLOW_PRODUCTION=false`, producción queda bloqueada aunque `PRODUCTION=true`.
+- Si el `confirmation_id` expiró, generá otro preview.
