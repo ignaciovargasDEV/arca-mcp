@@ -25,6 +25,7 @@ venv/
 # Local data and backups
 data/
 backups/
+private/
 *.dump
 *.sql.gz
 

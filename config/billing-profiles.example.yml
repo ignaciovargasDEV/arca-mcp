@@ -1,0 +1,49 @@
+# Copiá este archivo a private/billing-profiles.yml y adaptalo.
+# No pongas datos reales en este archivo de ejemplo.
+# Los puntos de venta, CUIT, certificados, SMTP y contraseñas van en .env.
+
+defaults:
+  accountant_profile: contador_principal
+  reference_pdf_dir: private/reference-pdfs
+  output_policy:
+    require_preview_before_emit: true
+    require_exact_confirmation: true
+
+invoice_profiles:
+  factura_c_local:
+    description: Factura C local de servicios
+    tool_preview: preview_factura_c
+    tool_emit: emitir_factura_c
+    reference_pdf: factura-c-referencia.pdf
+    defaults:
+      descripcion: Servicios profesionales
+      condicion_iva: 6
+      moneda: PES
+
+  factura_e_exportacion_servicios:
+    description: Factura E de exportacion de servicios
+    tool_preview: preview_factura_e
+    tool_emit: emitir_factura_e
+    reference_pdf: factura-e-referencia.pdf
+    defaults:
+      descripcion: Servicios profesionales
+      moneda: DOL
+      forma_pago: Contado
+      idioma_cbte: 1
+      pais_destino: null
+      cuit_pais_cliente: null
+
+accountant_profiles:
+  contador_principal:
+    name: Nombre Contador
+    email: contador@example.com
+    hermes_schedule:
+      enabled: false
+      day_of_month: 1
+      hour_local: "09:00"
+      instruction: "Usa arca_mcp enviar_reporte_contador para el mes anterior."
+    monthly_report:
+      attach_pdfs: true
+      attach_csv: false
+      include_summary: true
+      subject: "Comprobantes emitidos - {periodo}"

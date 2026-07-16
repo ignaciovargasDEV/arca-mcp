@@ -9,6 +9,8 @@ Este MCP puede emitir comprobantes fiscales reales. Tratá el servicio como infr
 - Producción requiere `PRODUCTION=true`.
 - Emitir en producción requiere además `ALLOW_PRODUCTION=true`.
 - `emitir_factura_c` requiere un `confirmation_id` generado por `preview_factura_c`.
+- `emitir_factura_e` requiere un `confirmation_id` generado por `preview_factura_e`.
+- `enviar_reporte_contador` requiere la frase exacta `CONFIRMO ENVIAR EMAIL`.
 - Los `confirmation_id` expiran a los 10 minutos.
 - Los `confirmation_id` son de un solo uso.
 - La frase exacta para producción es `CONFIRMO EMITIR FACTURA REAL`.
@@ -24,6 +26,8 @@ Este MCP puede emitir comprobantes fiscales reales. Tratá el servicio como infr
 - `*.csr`
 - dumps de base de datos
 - backups comprimidos
+- `private/`
+- PDFs reales de referencia o comprobantes reales
 
 Ya están ignorados en `.gitignore` y `.dockerignore`, pero revisá igual antes de publicar.
 
@@ -51,10 +55,12 @@ Antes de `ALLOW_PRODUCTION=true`:
 
 - Confirmá que el certificado fue generado manualmente.
 - Confirmá que el certificado está asociado a WSFE.
-- Confirmá que el punto de venta es Web Service.
+- Si emitís Factura E, confirmá que el certificado está asociado a WSFEX.
+- Confirmá que `AFIP_PUNTO_VENTA` corresponde a tu punto de venta WSFE.
+- Si emitís Factura E, confirmá que `AFIP_PUNTO_VENTA_EXPORTACION` corresponde a tu punto de venta WSFEX.
 - Confirmá que `AFIP_CUIT` no tiene guiones.
-- Confirmá que `AFIP_PUNTO_VENTA` es el correcto.
 - Corré `config_status`.
+- Para WSFEX, corré `parametros_factura_e(catalogo="puntos_venta")`.
 - Hacé un preview y leelo completo.
 
 Después de la primera factura real:
@@ -79,3 +85,10 @@ Configurá backups periódicos de PostgreSQL. El repo trae:
 ```
 
 Probá también restaurar en un entorno aparte. Un backup que nunca restauraste es una promesa, no una garantía.
+
+## SMTP
+
+- Guardá `SMTP_PASS` solo en `.env`.
+- Para Gmail usá app password, no tu contraseña normal.
+- Preferí `SMTP_PORT=587` si tu VPS bloquea `465`.
+- El email al contador solo envía comprobantes ya emitidos; no debe disparar emisión de facturas.

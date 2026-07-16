@@ -1,6 +1,6 @@
 # Setup Fiscal En ARCA
 
-Objetivo: dejar tu CUIT habilitado para emitir Factura C por Web Service, con certificado propio, punto de venta correcto y sin darle tu clave fiscal a ningún tercero.
+Objetivo: dejar tu CUIT habilitado para emitir por Web Service, con certificado propio, puntos de venta correctos y sin darle tu clave fiscal a ningún tercero.
 
 Esta guía está escrita para monotributistas y para el flujo de este MCP, que usa Afip SDK.
 
@@ -9,7 +9,7 @@ Esta guía está escrita para monotributistas y para el flujo de este MCP, que u
 - El portal de ARCA cambia seguido. Si un nombre no coincide exacto, buscá el equivalente en pantalla.
 - Guardá `arca.key`, `pedido.csr` y `arca.crt` en un lugar seguro.
 - La private key (`arca.key`) no se sube a ARCA y no se comparte.
-- El orden recomendado es: certificado, asociación a WSFE, punto de venta Web Service.
+- El orden recomendado es: certificado, asociaciones a web services, puntos de venta.
 - No uses automatizaciones que te pidan clave fiscal si no querés delegar ese acceso.
 
 ## 1. Clave Fiscal
@@ -88,13 +88,13 @@ certs/arca.key
 
 No subas `arca.key` al portal. ARCA solo necesita el CSR.
 
-## 4. Asociar El Certificado A WSFE
+## 4. Asociar El Certificado A Los Web Services
 
-El certificado por sí solo no alcanza. Tenés que asociarlo al web service de Facturación Electrónica.
+El certificado por sí solo no alcanza. Tenés que asociarlo a cada web service que vayas a usar.
 
 Entrá a `Administrador de Relaciones con Clave Fiscal`.
 
-Flujo típico:
+Para Factura C local:
 
 1. Nueva relación.
 2. Servicio.
@@ -104,15 +104,22 @@ Flujo típico:
 6. Como representante, elegí el certificado/alias que acabás de crear.
 7. Confirmá la relación.
 
-Si esta asociación falta, el certificado existe pero no puede facturar por WSFE.
+Para Factura E de exportación:
 
-## 5. Crear Punto De Venta Web Service
+1. Repetí el flujo de nueva relación.
+2. Buscá `Factura Electrónica de Exportación` o `WSFEX`.
+3. Como representante, elegí el mismo certificado/alias.
+4. Confirmá la relación.
 
-Necesitás un punto de venta específico para Web Services. No reutilices uno de `Comprobantes en Línea`.
+Si falta una asociación, el certificado existe pero no puede operar ese web service.
+
+## 5. Crear Puntos De Venta
+
+Necesitás puntos de venta específicos para los web services. No reutilices uno de `Comprobantes en Línea`.
 
 Entrá a `Administración de Puntos de Venta y Domicilios`.
 
-Flujo típico:
+Para Factura C / WSFE:
 
 1. Alta de punto de venta.
 2. Elegí un número libre.
@@ -123,8 +130,30 @@ Flujo típico:
 Después poné ese número en `.env`:
 
 ```env
-AFIP_PUNTO_VENTA=3
+AFIP_PUNTO_VENTA=tu-punto-de-venta-wsfe
 ```
+
+Para Factura E / WSFEX:
+
+1. Alta de punto de venta.
+2. Elegí un número libre.
+3. Tipo/sistema: exportación / Factura Electrónica de Exportación Web Service, según lo muestre ARCA.
+4. Guardá.
+
+Después poné ese número en `.env`:
+
+```env
+AFIP_PUNTO_VENTA_EXPORTACION=tu-punto-de-venta-wsfex
+```
+
+Ejemplo ficticio:
+
+```env
+AFIP_PUNTO_VENTA=3
+AFIP_PUNTO_VENTA_EXPORTACION=4
+```
+
+No copies esos números salvo que sean los tuyos. Cada CUIT puede tener otra numeración.
 
 Si mezclás puntos de venta de Comprobantes en Línea y Web Service, vas a tener errores de autorización o numeración.
 
@@ -157,7 +186,11 @@ PRODUCTION=false
 ALLOW_PRODUCTION=false
 ```
 
-Después revisá `config_status` desde tu cliente MCP.
+Después revisá `config_status` desde tu cliente MCP. Para WSFEX, además revisá:
+
+```txt
+parametros_factura_e(catalogo="puntos_venta")
+```
 
 Cuando pases a producción, dejá inicialmente:
 
@@ -179,8 +212,10 @@ Probá con una factura real chica y verificá el comprobante en ARCA.
 - `arca.key` guardada y con backup seguro.
 - `pedido.csr` generado.
 - `arca.crt` descargado desde ARCA.
-- Certificado asociado a WSFE.
-- Punto de venta Web Service creado.
+- Certificado asociado a WSFE si emitís Factura C.
+- Certificado asociado a WSFEX si emitís Factura E.
+- Punto de venta WSFE creado y configurado.
+- Punto de venta WSFEX creado y configurado si emitís Factura E.
 - `AFIP_ACCESS_TOKEN` configurado.
 - `.env` con CUIT y punto de venta correctos.
 - `config_status` OK.
@@ -194,8 +229,8 @@ Revisá rutas y permisos de `certs/arca.crt` y `certs/arca.key`.
 ARCA rechaza el comprobante por punto de venta:
 Verificá que el punto sea Web Service y que esté asociado correctamente.
 
-Error de autorización WSFE:
-Revisá la relación en `Administrador de Relaciones con Clave Fiscal`.
+Error de autorización WSFE/WSFEX:
+Revisá la relación del web service correspondiente en `Administrador de Relaciones con Clave Fiscal`.
 
 El CSR rebota:
 Revisá `O=`, `CN=` y `serialNumber=CUIT ...`. El nombre legal tiene que coincidir razonablemente con ARCA.
